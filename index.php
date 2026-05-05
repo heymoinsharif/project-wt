@@ -1,110 +1,70 @@
 <?php
-$pageTitle   = 'Home';
-$currentPage = 'home';
+/**
+ * FitForge | Home Page
+ */
+require_once 'includes/db_connect.php';
+$page_title = 'Home';
 include 'includes/header.php';
 ?>
 
-<!-- HERO SECTION -->
-<section class="hero" id="hero">
-  <div>
-    <div class="hero-badge">🚀 Your Productivity Companion</div>
-    <h1>Manage Tasks,<br><span>Achieve More.</span></h1>
-    <p>TaskFlow is a smart, elegant task management app that helps you stay organized, hit your deadlines, and get things done — beautifully.</p>
-    <div class="hero-btns">
-      <a href="register.php" class="btn btn-primary" id="heroGetStarted">Get Started Free</a>
-      <a href="#features" class="btn btn-outline" id="heroLearnMore">Explore Features</a>
+<!-- Hero Section -->
+<header class="hero" style="min-height: 100vh; display: flex; align-items: center; text-align: center; padding-top: var(--nav-height);">
+    <div class="container">
+        <h1 class="section-title" style="font-size: 4rem; margin-bottom: 20px;">
+            Forge Your <span class="text-gradient">Ultimate Form</span>
+        </h1>
+        <p class="section-subtitle" style="font-size: 1.2rem; margin-bottom: 40px; color: var(--text-main);">
+            Join the premium fitness platform designed to track your progress, calculate your metrics, and keep you motivated every step of the way.
+        </p>
+        <div class="hero-actions">
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="dashboard.php" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Go to Dashboard</a>
+            <?php else: ?>
+                <a href="auth.php" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Start Free Journey</a>
+            <?php endif; ?>
+            <a href="tools.php" class="btn btn-outline" style="font-size: 1.1rem; padding: 1rem 2.5rem; margin-left: 15px;">Explore Tools</a>
+        </div>
     </div>
-  </div>
+</header>
+
+<!-- Features Section -->
+<section class="container">
+    <div class="section-header">
+        <h2 class="section-title">Everything You Need</h2>
+        <p class="section-subtitle">A comprehensive suite of tools built for real results.</p>
+    </div>
+
+    <div class="grid grid-3">
+        <!-- Feature 1 -->
+        <div class="card" style="text-align: center;">
+            <i class="fas fa-calculator" style="font-size: 3rem; color: var(--secondary); margin-bottom: 20px;"></i>
+            <h3>Advanced BMI Calculator</h3>
+            <p style="color: var(--text-muted); margin-top: 10px;">Instantly calculate your Body Mass Index and find out which health category you belong to with our dynamic tool.</p>
+        </div>
+        
+        <!-- Feature 2 -->
+        <div class="card" style="text-align: center;">
+            <i class="fas fa-fire" style="font-size: 3rem; color: var(--accent); margin-bottom: 20px;"></i>
+            <h3>Daily Motivation</h3>
+            <p style="color: var(--text-muted); margin-top: 10px;">Lacking energy? Hit our motivation generator to get a random, hard-hitting quote to fuel your next workout.</p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="card" style="text-align: center;">
+            <i class="fas fa-chart-pie" style="font-size: 3rem; color: var(--primary); margin-bottom: 20px;"></i>
+            <h3>Progress Tracking</h3>
+            <p style="color: var(--text-muted); margin-top: 10px;">Create an account to access a personalized dashboard where you can log workouts and see your stats.</p>
+        </div>
+    </div>
 </section>
 
-<!-- STATS BAR -->
-<div class="stats-bar">
-  <div class="stats-grid">
-    <div>
-      <div class="stat-num"><span class="count-up" data-target="1200">0</span>+</div>
-      <div class="stat-label">Tasks Managed</div>
+<!-- Call to Action -->
+<section style="background: linear-gradient(rgba(15,23,42,0.9), rgba(15,23,42,0.9)), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop'); background-size: cover; background-position: center; padding: var(--spacing-xl) 0; margin-top: var(--spacing-xl); text-align: center;">
+    <div class="container">
+        <h2 class="section-title text-gradient">Ready to Transform?</h2>
+        <p style="max-width: 600px; margin: 20px auto 40px; font-size: 1.2rem;">Join FitForge today. It only takes 30 seconds to sign up and start utilizing our premium tools.</p>
+        <a href="auth.php" class="btn btn-primary" style="font-size: 1.2rem;">Create Account Now <i class="fas fa-arrow-right" style="margin-left: 8px;"></i></a>
     </div>
-    <div>
-      <div class="stat-num"><span class="count-up" data-target="320">0</span>+</div>
-      <div class="stat-label">Active Users</div>
-    </div>
-    <div>
-      <div class="stat-num"><span class="count-up" data-target="98">0</span>%</div>
-      <div class="stat-label">Satisfaction Rate</div>
-    </div>
-    <div>
-      <div class="stat-num"><span class="count-up" data-target="7">0</span></div>
-      <div class="stat-label">Full Pages</div>
-    </div>
-  </div>
-</div>
-
-<!-- FEATURES SECTION -->
-<section class="section" id="features">
-  <h2 class="section-title">Everything You Need</h2>
-  <p class="section-sub">A complete toolkit to help you plan, track and achieve your goals.</p>
-  <div class="features-grid">
-    <div class="feature-card">
-      <div class="feature-icon">📋</div>
-      <h3>Task Management</h3>
-      <p>Create, update, and delete tasks with titles, descriptions, priorities, and due dates.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🔐</div>
-      <h3>Secure Authentication</h3>
-      <p>Password hashing with PHP, session management, and "Remember Me" cookie support.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">📊</div>
-      <h3>Progress Dashboard</h3>
-      <p>Visual stats showing pending, in-progress, and completed tasks at a glance.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">📱</div>
-      <h3>Fully Responsive</h3>
-      <p>Works flawlessly on desktop, tablet, and mobile devices using pure CSS.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🖼️</div>
-      <h3>Profile & Uploads</h3>
-      <p>Personalize your account with a custom profile picture via PHP file uploads.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">✅</div>
-      <h3>Smart Filtering</h3>
-      <p>Filter tasks by status instantly with dynamic JavaScript — no page reload.</p>
-    </div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="section" style="background:var(--bg-card2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <h2 class="section-title">How It Works</h2>
-  <p class="section-sub">Three simple steps to a more productive you.</p>
-  <div class="features-grid" style="max-width:900px;margin:0 auto;">
-    <div class="feature-card" style="text-align:center;">
-      <div class="feature-icon" style="margin:0 auto 20px;">1️⃣</div>
-      <h3>Register / Login</h3>
-      <p>Create your free account securely or log in to access your personal dashboard.</p>
-    </div>
-    <div class="feature-card" style="text-align:center;">
-      <div class="feature-icon" style="margin:0 auto 20px;">2️⃣</div>
-      <h3>Add Your Tasks</h3>
-      <p>Create tasks with priorities, due dates, and detailed descriptions from any device.</p>
-    </div>
-    <div class="feature-card" style="text-align:center;">
-      <div class="feature-icon" style="margin:0 auto 20px;">3️⃣</div>
-      <h3>Track & Complete</h3>
-      <p>Update task statuses, monitor progress on your dashboard, and celebrate done tasks.</p>
-    </div>
-  </div>
-</section>
-
-<!-- CTA -->
-<section class="section" style="text-align:center;">
-  <h2 class="section-title">Ready to Get Organized?</h2>
-  <p class="section-sub">Join TaskFlow today and take control of your productivity.</p>
-  <a href="register.php" class="btn btn-primary" id="ctaRegister" style="font-size:1.1rem;padding:16px 40px;">Create Your Free Account →</a>
 </section>
 
 <?php include 'includes/footer.php'; ?>

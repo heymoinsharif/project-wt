@@ -1,206 +1,183 @@
 <?php
-$pageTitle   = 'Dashboard';
-$currentPage = 'dashboard';
-include 'includes/header.php';
-require_once 'config/db.php';
+/**
+ * FitForge | User Dashboard
+ * Protected route, requires authentication.
+ */
+require_once 'includes/db_connect.php';
+session_start();
 
-// Auth guard
+// Redirect to login if not authenticated
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
+    $_SESSION['flash_message'] = "Please log in to access your dashboard.";
+    $_SESSION['flash_type'] = "error";
+    header("Location: auth.php");
+    exit();
 }
 
-$user_id  = (int)$_SESSION['user_id'];
-$username = htmlspecialchars($_SESSION['username']);
-$profile_pic = htmlspecialchars($_SESSION['profile_pic'] ?? 'uploads/default_avatar.png');
-$email    = htmlspecialchars($_SESSION['email'] ?? '');
+$user_id = $_SESSION['user_id'];
 
-// Fetch task counts
-$counts = ['total'=>0,'pending'=>0,'in_progress'=>0,'completed'=>0];
-$cRes = mysqli_query($conn, "SELECT status, COUNT(*) as cnt FROM tasks WHERE user_id=$user_id GROUP BY status");
-while ($row = mysqli_fetch_assoc($cRes)) {
-    $counts[$row['status']] = (int)$row['cnt'];
-    $counts['total'] += (int)$row['cnt'];
+// Create workout_logs table automatically if it doesn't exist
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS workout_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        workout_type VARCHAR(100) NOT NULL,
+        duration_minutes INT NOT NULL,
+        calories_burned INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )");
+} catch (\PDOException $e) {
+    // Ignore if constraint exists or table creation fails due to permissions, etc.
 }
 
-// Fetch all tasks
-$tasksRes = mysqli_query($conn, "SELECT * FROM tasks WHERE user_id=$user_id ORDER BY created_at DESC");
-
-// Flash message (after redirect)
-$flash = '';
-if (isset($_SESSION['flash'])) {
-    $flash = $_SESSION['flash'];
-    unset($_SESSION['flash']);
+// Handle Form Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'log_workout') {
+    $type = trim($_POST['workout_type']);
+    $duration = (int)$_POST['duration'];
+    $calories = (int)$_POST['calories'];
+    
+    if (!empty($type) && $duration > 0) {
+        $stmt = $pdo->prepare("INSERT INTO workout_logs (user_id, workout_type, duration_minutes, calories_burned) VALUES (?, ?, ?, ?)");
+        if ($stmt->execute([$user_id, $type, $duration, $calories])) {
+            $_SESSION['flash_message'] = "Workout logged successfully!";
+            $_SESSION['flash_type'] = "success";
+        } else {
+            $_SESSION['flash_message'] = "Failed to log workout.";
+            $_SESSION['flash_type'] = "error";
+        }
+    } else {
+        $_SESSION['flash_message'] = "Please enter valid workout details.";
+        $_SESSION['flash_type'] = "error";
+    }
+    header("Location: dashboard.php");
+    exit();
 }
+
+// Handle Workout Deletion
+if (isset($_GET['delete_id'])) {
+    $delete_id = (int)$_GET['delete_id'];
+    $stmt = $pdo->prepare("DELETE FROM workout_logs WHERE id = ? AND user_id = ?");
+    if ($stmt->execute([$delete_id, $user_id])) {
+        $_SESSION['flash_message'] = "Workout removed.";
+        $_SESSION['flash_type'] = "success";
+    }
+    header("Location: dashboard.php");
+    exit();
+}
+
+// Fetch user data
+$stmt = $pdo->prepare("SELECT username, email, full_name, fitness_goal, created_at FROM users WHERE id = ?");
+$stmt->execute([$user_id]);
+$user = $stmt->fetch();
+
+// Fetch recent workouts
+$stmt = $pdo->prepare("SELECT * FROM workout_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
+$stmt->execute([$user_id]);
+$recent_workouts = $stmt->fetchAll();
+
+// Fetch total stats
+$stmt = $pdo->prepare("SELECT COUNT(*) as total_workouts, SUM(duration_minutes) as total_minutes, SUM(calories_burned) as total_calories FROM workout_logs WHERE user_id = ?");
+$stmt->execute([$user_id]);
+$stats = $stmt->fetch();
+
+$page_title = 'Dashboard';
+$skip_session_start = true;
+include 'includes/header.php';
 ?>
 
-<div class="dash-layout">
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-user">
-      <img src="<?= $profile_pic ?>" alt="Avatar" class="sidebar-avatar" id="sideAvatar" onerror="this.src='uploads/default_avatar.png'" />
-      <div>
-        <div class="sidebar-username"><?= $username ?></div>
-        <div class="sidebar-email"><?= $email ?></div>
-      </div>
-    </div>
-    <ul class="sidebar-nav">
-      <li><a href="dashboard.php" class="active"><span class="icon">📋</span> My Tasks</a></li>
-      <li><a href="task_form.php"><span class="icon">➕</span> Add Task</a></li>
-      <li><a href="profile.php"><span class="icon">👤</span> Profile</a></li>
-      <li><a href="about.php"><span class="icon">📖</span> About</a></li>
-      <li class="logout-link" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
-        <a href="logout.php" id="sideLogout"><span class="icon">🚪</span> Logout</a>
-      </li>
-    </ul>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="dash-content">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-      <div>
-        <h1 class="page-title">Hello, <?= $username ?>! 👋</h1>
-        <p class="page-sub">Here's an overview of your tasks today.</p>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-outline btn-sm" id="sidebarToggle" style="display:none;">☰ Menu</button>
-        <a href="task_form.php" class="btn btn-primary btn-sm" id="addTaskBtn">+ Add Task</a>
-      </div>
-    </div>
-
-    <!-- Flash message -->
-    <?php if ($flash): ?>
-      <div class="alert alert-success">✅ <?= htmlspecialchars($flash) ?></div>
-    <?php endif; ?>
-
-    <!-- STAT CARDS -->
-    <div class="dash-stats">
-      <div class="dash-stat-card">
-        <div class="dash-stat-icon ds-purple">📋</div>
+<div class="container" style="padding-top: calc(var(--nav-height) + var(--spacing-xl)); min-height: 80vh;">
+    <div class="section-header" style="text-align: left; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
         <div>
-          <div class="dash-stat-num count-up" data-target="<?= $counts['total'] ?>"><?= $counts['total'] ?></div>
-          <div class="dash-stat-label">Total Tasks</div>
+            <h1 class="section-title" style="margin-bottom: 5px;">Welcome back, <span class="text-gradient"><?php echo htmlspecialchars($user['username']); ?></span>!</h1>
+            <p class="section-subtitle" style="margin: 0;">Here is your fitness progress.</p>
         </div>
-      </div>
-      <div class="dash-stat-card">
-        <div class="dash-stat-icon ds-yellow">⏳</div>
-        <div>
-          <div class="dash-stat-num"><?= $counts['pending'] ?></div>
-          <div class="dash-stat-label">Pending</div>
-        </div>
-      </div>
-      <div class="dash-stat-card">
-        <div class="dash-stat-icon ds-purple">🔄</div>
-        <div>
-          <div class="dash-stat-num"><?= $counts['in_progress'] ?></div>
-          <div class="dash-stat-label">In Progress</div>
-        </div>
-      </div>
-      <div class="dash-stat-card">
-        <div class="dash-stat-icon ds-green">✅</div>
-        <div>
-          <div class="dash-stat-num"><?= $counts['completed'] ?></div>
-          <div class="dash-stat-label">Completed</div>
-        </div>
-      </div>
+        <a href="logout.php" class="btn btn-outline" style="border-color: var(--accent); color: var(--accent);">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
     </div>
 
-    <!-- PROGRESS -->
-    <?php if ($counts['total'] > 0):
-      $pct = round(($counts['completed'] / $counts['total']) * 100); ?>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:28px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-weight:600;">Overall Progress</span>
-        <span style="color:var(--primary);font-weight:700;"><?= $pct ?>%</span>
-      </div>
-      <div class="progress-bar" style="height:10px;">
-        <div class="progress-fill" style="width:<?= $pct ?>%;"></div>
-      </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- TASKS TABLE -->
-    <div class="tasks-header">
-      <h3>All Tasks</h3>
-      <div class="task-filters">
-        <button class="filter-btn active" data-filter="all" id="filterAll">All (<?= $counts['total'] ?>)</button>
-        <button class="filter-btn" data-filter="pending"     id="filterPending">Pending</button>
-        <button class="filter-btn" data-filter="in_progress" id="filterInProgress">In Progress</button>
-        <button class="filter-btn" data-filter="completed"   id="filterCompleted">Completed</button>
-      </div>
+    <!-- Stats Overview -->
+    <div class="grid grid-3" style="margin-bottom: var(--spacing-lg);">
+        <div class="card" style="text-align: center; padding: var(--spacing-md); border-top: 3px solid var(--primary);">
+            <i class="fas fa-dumbbell" style="font-size: 2rem; color: var(--primary); margin-bottom: 10px;"></i>
+            <h2 style="margin: 0; font-size: 2.5rem;"><?php echo $stats['total_workouts'] ?: 0; ?></h2>
+            <p style="color: var(--text-muted);">Total Workouts</p>
+        </div>
+        <div class="card" style="text-align: center; padding: var(--spacing-md); border-top: 3px solid var(--secondary);">
+            <i class="fas fa-clock" style="font-size: 2rem; color: var(--secondary); margin-bottom: 10px;"></i>
+            <h2 style="margin: 0; font-size: 2.5rem;"><?php echo $stats['total_minutes'] ?: 0; ?> <span style="font-size: 1rem; color: var(--text-muted);">min</span></h2>
+            <p style="color: var(--text-muted);">Time Active</p>
+        </div>
+        <div class="card" style="text-align: center; padding: var(--spacing-md); border-top: 3px solid var(--accent);">
+            <i class="fas fa-fire" style="font-size: 2rem; color: var(--accent); margin-bottom: 10px;"></i>
+            <h2 style="margin: 0; font-size: 2.5rem;"><?php echo $stats['total_calories'] ?: 0; ?> <span style="font-size: 1rem; color: var(--text-muted);">kcal</span></h2>
+            <p style="color: var(--text-muted);">Calories Burned</p>
+        </div>
     </div>
 
-    <?php if ($counts['total'] === 0): ?>
-      <div class="empty-state">
-        <div class="empty-icon">📭</div>
-        <h4>No tasks yet!</h4>
-        <p>Click "Add Task" to create your first task.</p>
-        <a href="task_form.php" class="btn btn-primary btn-sm" style="margin-top:16px;">+ Create First Task</a>
-      </div>
-    <?php else: ?>
-    <div class="task-table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Title</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Due Date</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php $i = 1; while ($task = mysqli_fetch_assoc($tasksRes)):
-            $due = $task['due_date'] ? date('d M Y', strtotime($task['due_date'])) : '—';
-            $isOverdue = $task['due_date'] && strtotime($task['due_date']) < time() && $task['status'] !== 'completed';
-          ?>
-          <tr class="task-row" data-status="<?= $task['status'] ?>">
-            <td style="color:var(--text-muted);"><?= $i++ ?></td>
-            <td>
-              <strong><?= htmlspecialchars($task['title']) ?></strong>
-              <?php if ($task['description']): ?>
-                <div style="color:var(--text-muted);font-size:0.8rem;margin-top:2px;"><?= htmlspecialchars(substr($task['description'],0,60)) ?>...</div>
-              <?php endif; ?>
-            </td>
-            <td><span class="badge badge-<?= $task['priority'] ?>"><?= ucfirst($task['priority']) ?></span></td>
-            <td><span class="badge badge-<?= $task['status'] ?>"><?= str_replace('_',' ',ucfirst($task['status'])) ?></span></td>
-            <td style="<?= $isOverdue ? 'color:var(--danger);' : '' ?>">
-              <?= $due ?><?= $isOverdue ? ' ⚠️' : '' ?>
-            </td>
-            <td>
-              <div class="task-actions">
-                <a href="task_form.php?id=<?= $task['id'] ?>" class="btn btn-outline btn-sm" id="editTask<?= $task['id'] ?>">✏️ Edit</a>
-                <button class="btn btn-danger btn-sm delete-task-btn"
-                        id="deleteTask<?= $task['id'] ?>"
-                        data-url="delete_task.php?id=<?= $task['id'] ?>"
-                        data-title="<?= htmlspecialchars($task['title']) ?>">🗑️ Delete</button>
-              </div>
-            </td>
-          </tr>
-          <?php endwhile; ?>
-        </tbody>
-      </table>
+    <div class="grid grid-2">
+        <!-- Log Workout Form -->
+        <div class="card" style="border-top: 4px solid var(--primary);">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-plus-circle" style="color: var(--primary);"></i> Log a Workout</h3>
+            <form method="POST" action="dashboard.php">
+                <input type="hidden" name="action" value="log_workout">
+                
+                <div class="form-group">
+                    <label class="form-label" for="workout_type">Workout Type</label>
+                    <input type="text" name="workout_type" id="workout_type" class="form-control" placeholder="e.g., Upper Body, Running, Yoga" required>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: var(--spacing-md);">
+                    <div style="flex: 1;">
+                        <label class="form-label" for="duration">Duration (mins)</label>
+                        <input type="number" name="duration" id="duration" class="form-control" placeholder="e.g., 45" required min="1">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="form-label" for="calories">Calories Burned</label>
+                        <input type="number" name="calories" id="calories" class="form-control" placeholder="Optional" min="0">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%;"><i class="fas fa-save"></i> Save Workout</button>
+            </form>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="card" style="border-top: 4px solid var(--secondary);">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-history" style="color: var(--secondary);"></i> Recent Activity</h3>
+            
+            <?php if (empty($recent_workouts)): ?>
+                <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: var(--radius-sm); text-align: center; color: var(--text-muted);">
+                    <i class="fas fa-running" style="font-size: 3rem; margin-bottom: 15px; color: rgba(255,255,255,0.2);"></i>
+                    <p>No recent workouts logged.</p>
+                    <p style="font-size: 0.9rem;">Log your first workout to start tracking your progress!</p>
+                </div>
+            <?php else: ?>
+                <ul style="list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; padding-right: 10px;">
+                    <?php foreach ($recent_workouts as $workout): ?>
+                        <li style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: var(--radius-sm); padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="margin: 0; color: var(--text-main);"><?php echo htmlspecialchars($workout['workout_type']); ?></h4>
+                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px; display: flex; gap: 15px;">
+                                    <span><i class="fas fa-clock"></i> <?php echo $workout['duration_minutes']; ?> min</span>
+                                    <?php if ($workout['calories_burned']): ?>
+                                        <span><i class="fas fa-fire" style="color: var(--accent);"></i> <?php echo $workout['calories_burned']; ?> kcal</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.3); margin-top: 5px;">
+                                    <?php echo date('M j, g:i a', strtotime($workout['created_at'])); ?>
+                                </div>
+                            </div>
+                            <a href="dashboard.php?delete_id=<?php echo $workout['id']; ?>" onclick="return confirm('Are you sure you want to remove this workout?');" style="color: var(--accent); padding: 5px;" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
     </div>
-    <?php endif; ?>
-  </main>
 </div>
-
-<!-- DELETE CONFIRMATION MODAL -->
-<div class="modal-overlay" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal">
-    <div style="font-size:2.5rem;margin-bottom:12px;">🗑️</div>
-    <h3 id="modalTitle">Delete Task?</h3>
-    <p>Are you sure you want to delete <strong id="deleteTaskName"></strong>? This action cannot be undone.</p>
-    <div class="modal-btns">
-      <button class="btn btn-outline" id="cancelDelete">Cancel</button>
-      <a href="#" class="btn btn-danger" id="confirmDelete">Yes, Delete</a>
-    </div>
-  </div>
-</div>
-
-<style>
-@media(max-width:900px){#sidebarToggle{display:inline-flex!important;}}
-</style>
 
 <?php include 'includes/footer.php'; ?>
